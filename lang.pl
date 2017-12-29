@@ -21,8 +21,8 @@ term_expansion(DEF is Body , Clause) :-
 % Evaluate primitive-datatypes.
 eval(Exp, Val) :- number(Exp), !, Val is Exp.
 
-% If structure,
-eval(if C then X else Y, Val) :-  !, (eval(C, 0) -> eval(Y, Val); eval(X, Val)).
+% If structure, works with both fail or 0 bool.
+eval(if C then X else Y, Val) :-  !, ((eval(C, R), R =\= 0) -> eval(X, Val); eval(Y, Val)) .
 
 % List-like structure
 eval([], []) :- !.
@@ -72,3 +72,51 @@ comparator_op(X) :-
 % X is the result of applyng Operator Op to arguments Args. 1 means
 % true, whereas 0 false.
 func_op(Op, Args, X) :- (apply(Op, Args) -> X is 1; X is 0), !.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
