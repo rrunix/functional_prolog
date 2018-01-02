@@ -1,9 +1,11 @@
-:- use_module(library(write)).
+% :- use_module(library(write)).
 :- op( 500, fx, if).
 :- op( 600, xfy, then).
 :- op( 600, xfx, else).
+:- dynamic def/2.
 
-% exec(Exp, File): Execute the expresion Exp of the clauses in File.
+% exec(Exp, File): Execute the expresion Exp using the functional
+% definitions in the file File.
 exec(Exp,File):-
    read_func_lang(File),
    eval(Exp, R),
@@ -24,71 +26,57 @@ read_func_lang(File) :-
 read_func_lang_stream(S) :-
    read(S, T),
    (T \== end_of_file ->
-       def(T),
+       assert_functional_predicate(T),
        read_func_lang_stream(S)
    ; true).
 
-% def(X): Load the functional predicate X into prolog.
-def(Def is Body) :-
-   def(Def, Body), !.
+% assert_functional_predicate(X): Assert the functional predicate X.
+assert_functional_predicate(Def is Body):-
+   assert(def(Def, Body)), !.
 
-def(X) :-
-   write(["Warning: Ignoring malformed predicate; Functional Predicates are defined 'Def is Body'", X]).
+assert_functional_predicate(X) :-
+   throw([invalid_functional_predicate, X]).
 
-% def(X): Load the functional predicate Def is Body into prolog.
-def(Def, Body) :-
-   expand_term(Def is Body, Clause),
-   assertz(Clause).
-
-% expand_term(X, Clause). Clause is the result of translating X from our
-% functional language.
-expand_term(DEF is Body , Clause) :-
-	DEF =.. Terms,
-        append(Terms, [__OUT], NewTerms),
-        NewDef =.. NewTerms,
-        Clause = :-(NewDef, eval(Body, __OUT)).
-
-% eval(Exp, Val): Val is the result of evaluating the expresion Exp.
+% eval(Exp, Val): Val is the result of evaluating the expresion Exp. The
+% expression is an arithmetical operation, so the result is a number.
+%
+% Operators available available are: +, -, /, * and mod.
+% Operands available are numbers, and the result of applying
+% definitions, which are templates.
+%
+% Definitions are defined as def/2, concretely def(A, B). When an
+% operand in eval matches A, then it is substituted by B.
 %
 % Evaluate primitive-datatypes.
 eval(Exp, Val) :- number(Exp), !, Val is Exp.
 
-% If structure, works with both fail or 0 bool.
-eval(if C then X else Y, Val) :-  !, ((eval(C, R), R =\= 0) -> eval(X, Val); eval(Y, Val)) .
-
-% List-like structure,
-% Note: this predicate rely on an extern predicate to perform the
-% evaluation to increase the performance, but would be possible to
-% achieve using a recursive call over eval.
-eval([X|Xs], [Y|Ys]) :-
-   eval_list([X|Xs], [Y|Ys]), !.
+% If structure, false is represented as 0, true as a number distinct
+% from 0.
+eval(if C then X else Y, Val) :-  !, ((eval(C, 0)) -> eval(Y, Val); eval(X, Val)) .
 
 % Evaluate arithmetical operations
 eval(Exp, Val) :-
-   Exp =.. [Func | Pargs],
+   Exp =.. [Func | Args],
    arithmetic_op(Func),
    !,
-   eval(Pargs, Args),
-   NewExp =.. [Func | Args],
+   eval_list(Args, Pargs),
+   NewExp =.. [Func | Pargs],
    Val is NewExp.
 
 % Evaluate comparisons
 eval(Exp, Val) :-
-   Exp =.. [Func | Pargs],
+   Exp =.. [Func | Args],
    comparator_op(Func),
    !,
-   eval(Pargs, Args),
-   func_op(Func, Args, Val).
+   eval_list(Args, Pargs),
+   NewExp =.. [Func | Pargs],
+   bool_op(NewExp, Val).
 
-% Evaluate any other function. It also works with standar-ones as long
-% as the ouput is the last argument.
+% Evaluate definitions.
 eval(Exp, Val) :-
-   Exp =.. [Func | Pargs],
-   exists_predicate(Func, _),
+   def(Exp, NewExp),
    !,
-   eval(Pargs, Args),
-   append(Args, [Val], NewArgs),
-   apply_call(Func, NewArgs).
+   eval(NewExp, Val).
 
 % Not matching function found, raising exception.
 eval(Exp, _):-
@@ -101,52 +89,26 @@ eval_list([X|Xs], [Y|Ys]) :-
    eval(X, Y),
    eval_list(Xs, Ys).
 
-% exists_predicate(Pred, Args): Predicate Pred with arity
-% length(Args) is defined.
-exists_predicate(Pred, Args) :-
-   length(Args, X),
-   current_predicate(Pred/X).
-
 % arithmetic_op(X): X is an arithmetical operator
 arithmetic_op(X) :-
-   X = +,   !;
-   X = -,   !;
-   X = *,   !;
-   X = /,   !;
-   X = mod, !.
+   X = +   ;
+   X = -   ;
+   X = *   ;
+   X = /   ;
+   X = mod .
 
 % comparator_op(X): X is a comparator operator.
 comparator_op(X) :-
-   X = >,   !;
-   X = <,   !;
-   X = >=,  !;
-   X = <=,  !;
-   X = =:=, !;
-   X = =\=, !.
+   X = >   ;
+   X = <   ;
+   X = >=  ;
+   X = <=  ;
+   X = =:= ;
+   X = =\= .
 
-% func_op(Op, Args, X) : X is the boolean result (0 if fail, 1 if
-% succed) of evaluating the expresion Func(Args).
-func_op(Op, Args, X) :- (apply_call(Op, Args) -> X is 1; X is 0).
-
-% apply_call(Func, Args): Call predicate Func(Args).
-apply_call(Func, Args) :-
-   Expr =.. [Func | Args],
-   call(Expr).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+% func_op(Exp, X) : X is the boolean result (0 if fail, 1 if
+% succed) of evaluating the expresion Exp.
+bool_op(Exp, X) :- (call(Exp) -> X is 1; X is 0).
 
 
 
