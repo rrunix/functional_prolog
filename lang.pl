@@ -109,34 +109,3 @@ comparator_op(X) :-
 % func_op(Exp, X) : X is the boolean result (0 if fail, 1 if
 % succed) of evaluating the expresion Exp.
 bool_op(Exp, X) :- (call(Exp) -> X is 1; X is 0).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
