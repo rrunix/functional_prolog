@@ -54,12 +54,18 @@ eval(Exp, Val) :- number(Exp), !, Val is Exp.
 % from 0.
 eval(if C then X else Y, Val) :-  !, ((eval(C, 0)) -> eval(Y, Val); eval(X, Val)) .
 
+% Eval list-like structure
+eval([], []) :- !.
+eval([Exp|Exps], [Val|Vals]) :-
+   eval(Exp, Val),
+   eval(Exps, Vals), !.
+
 % Evaluate arithmetical operations
 eval(Exp, Val) :-
    Exp =.. [Func | Args],
    arithmetic_op(Func),
    !,
-   eval_list(Args, Pargs),
+   eval(Args, Pargs),
    NewExp =.. [Func | Pargs],
    Val is NewExp.
 
@@ -68,7 +74,7 @@ eval(Exp, Val) :-
    Exp =.. [Func | Args],
    comparator_op(Func),
    !,
-   eval_list(Args, Pargs),
+   eval(Args, Pargs),
    NewExp =.. [Func | Pargs],
    bool_op(NewExp, Val).
 
@@ -81,13 +87,6 @@ eval(Exp, Val) :-
 % Not matching function found, raising exception.
 eval(Exp, _):-
    throw([unrecognized_expression, Exp]).
-
-% eval_list(X, Y): Y is the resulting list of evaluating the
-% individual values of X.
-eval_list([], []).
-eval_list([X|Xs], [Y|Ys]) :-
-   eval(X, Y),
-   eval_list(Xs, Ys).
 
 % arithmetic_op(X): X is an arithmetical operator
 arithmetic_op(X) :-
