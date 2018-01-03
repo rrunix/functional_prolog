@@ -5,8 +5,10 @@
 :- dynamic def/2.
 
 % exec(Exp, File): Execute the expresion Exp using the functional
-% definitions in the file File.
+% definitions in the file File. All previous functional definitions
+% are removed to avoid dependency clashing.
 exec(Exp,File):-
+   retractall(def(_, _))
    read_func_lang(File),
    eval(Exp, R),
    write(Exp),
