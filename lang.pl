@@ -1,4 +1,3 @@
-% :- use_module(library(write)).
 :- op( 500, fx, if).
 :- op( 600, xfy, then).
 :- op( 600, xfx, else).
@@ -8,6 +7,7 @@
 % definitions in the file File. All previous functional definitions
 % are removed to avoid dependency clashing.
 exec(Exp,File):-
+   retractall(def(_, _)),
    read_func_lang(File),
    eval(Exp, R),
    write(Exp),
@@ -24,19 +24,25 @@ read_func_lang(File) :-
 
 % read_func_lang_stream(S): Load into prolog the funcional predicates in
 % the stream S.
-read_func_lang_stream(S) :-
-   read(S, T),
+read_func_lang_stream(S):-
+   catch(read(S, T),
+		 error(Err, Context),
+		 format("WARNING: Ignoring malformed predicate ~w. ~w\n", [Err, Context])),
    (T \== end_of_file ->
-       assert_functional_predicate(T),
-       read_func_lang_stream(S)
-   ; true).
+		(check_and_insert_func_predicate(T), read_func_lang_stream(S));
+		true).
+
+% check_and_insert_func_predicate(P) :- Check and insert the functional predicate P.
+check_and_insert_func_predicate(P) :- var(P).
+check_and_insert_func_predicate(P) :- assert_functional_predicate(P).
+
 
 % assert_functional_predicate(X): Assert the functional predicate X.
 assert_functional_predicate(Def is Body):-
    assert(def(Def, Body)), !.
 
 assert_functional_predicate(X) :-
-   throw([invalid_functional_predicate, X]).
+   format("Invalid functional predicate. ~w.\n", [X]).
 
 % eval(Exp, Val): Val is the result of evaluating the expresion Exp. The
 % expression is an arithmetical operation, so the result is a number.
@@ -53,20 +59,14 @@ eval(Exp, Val) :- number(Exp), !, Val is Exp.
 
 % If structure, false is represented as 0, true as a number distinct
 % from 0.
-eval(if C then X else Y, Val) :-  !, ((eval(C, 0)) -> eval(Y, Val); eval(X, Val)) .
-
-% Eval list-like structure
-eval([], []) :- !.
-eval([Exp|Exps], [Val|Vals]) :-
-   eval(Exp, Val),
-   eval(Exps, Vals), !.
+eval(if C then X else Y, Val) :-  !, ((eval(C, R), R=\=0) -> eval(X, Val); eval(Y, Val)) .
 
 % Evaluate arithmetical operations
 eval(Exp, Val) :-
    Exp =.. [Func | Args],
    arithmetic_op(Func),
    !,
-   eval(Args, Pargs),
+   eval_list(Args, Pargs),
    NewExp =.. [Func | Pargs],
    Val is NewExp.
 
@@ -75,7 +75,7 @@ eval(Exp, Val) :-
    Exp =.. [Func | Args],
    comparator_op(Func),
    !,
-   eval(Args, Pargs),
+   eval_list(Args, Pargs),
    NewExp =.. [Func | Pargs],
    bool_op(NewExp, Val).
 
@@ -88,6 +88,14 @@ eval(Exp, Val) :-
 % Not matching function found, raising exception.
 eval(Exp, _):-
    throw([unrecognized_expression, Exp]).
+
+
+% Eval list-like structure
+eval_list([], []) :- !.
+eval_list([Exp|Exps], [Val|Vals]) :-
+   eval(Exp, Val),
+   eval_list(Exps, Vals), !.
+
 
 % arithmetic_op(X): X is an arithmetical operator
 arithmetic_op(X) :-
@@ -102,7 +110,7 @@ comparator_op(X) :-
    X = >   ;
    X = <   ;
    X = >=  ;
-   X = <=  ;
+   X = =<  ;
    X = =:= ;
    X = =\= .
 
