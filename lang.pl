@@ -10,16 +10,12 @@ exec(Exp,File):-
    retractall(def(_, _)),
    read_func_lang(File),
    eval(Exp, R),
-   write(Exp),
-   write('='),
-   write(R),
-   write('\n').
+   format("~w = ~w\n", [Exp, R]).
 
 % read_func_lang(File): Load into prolog the functional predicates in
 % the file File.
 read_func_lang(File) :-
-   atom_concat(File, '.pl', FullFile),
-   open(FullFile, read, S),
+   open(File, read, S),
    read_func_lang_stream(S).
 
 % read_func_lang_stream(S): Load into prolog the funcional predicates in
@@ -54,12 +50,25 @@ assert_functional_predicate(X) :-
 % Definitions are defined as def/2, concretely def(A, B). When an
 % operand in eval matches A, then it is substituted by B.
 %
+
+% Evaluate free variable
+eval(Exp, Val) :-
+   var(Exp),
+   !,
+   format("Cannot evaluate free variables; replacing by 0\n"),
+   Val is 0.
+
 % Evaluate primitive-datatypes.
 eval(Exp, Val) :- number(Exp), !, Val is Exp.
 
 % If structure, false is represented as 0, true as a number distinct
 % from 0.
-eval(if C then X else Y, Val) :-  !, ((eval(C, R), R=\=0) -> eval(X, Val); eval(Y, Val)) .
+eval(if C then X else Y, Val) :-  \+ number(C), !, eval(C, R), eval(if R then X else Y, Val).
+eval(if 1 then X else _, Val):- !, eval(X, Val).
+eval(if 0 then _ else Y, Val):- !, eval(Y, Val).
+eval(if X then _ else _, _):-
+	format("Boolean must be either 1 or 0, not ~d\n", [X]),
+	abort.
 
 % Evaluate arithmetical operations
 eval(Exp, Val) :-
@@ -73,7 +82,7 @@ eval(Exp, Val) :-
 % Evaluate comparisons
 eval(Exp, Val) :-
    Exp =.. [Func | Args],
-   comparator_op(Func),
+   boolean_op(Func),
    !,
    eval_list(Args, Pargs),
    NewExp =.. [Func | Pargs],
@@ -81,14 +90,18 @@ eval(Exp, Val) :-
 
 % Evaluate definitions.
 eval(Exp, Val) :-
-   def(Exp, NewExp),
+   Exp =.. [Func | Args],
+   eval_list(Args, PArgs),
+   EvalExp =.. [Func | PArgs],
+   def(EvalExp, NewExp),
    !,
    eval(NewExp, Val).
+   % asserta(def(EvalExp, Val)). Uncomment to enable memoization
 
 % Not matching function found, raising exception.
 eval(Exp, _):-
-   throw([unrecognized_expression, Exp]).
-
+   format("Expresion ~w not recognized\n", [Exp]),
+   abort.
 
 % Eval list-like structure
 eval_list([], []) :- !.
@@ -96,24 +109,21 @@ eval_list([Exp|Exps], [Val|Vals]) :-
    eval(Exp, Val),
    eval_list(Exps, Vals), !.
 
-
-% arithmetic_op(X): X is an arithmetical operator
-arithmetic_op(X) :-
-   X = +   ;
-   X = -   ;
-   X = *   ;
-   X = /   ;
-   X = mod .
-
-% comparator_op(X): X is a comparator operator.
-comparator_op(X) :-
-   X = >   ;
-   X = <   ;
-   X = >=  ;
-   X = =<  ;
-   X = =:= ;
-   X = =\= .
-
 % func_op(Exp, X) : X is the boolean result (0 if fail, 1 if
-% succed) of evaluating the expresion Exp.
+% succed) of evaluating the expresiQon Exp.
 bool_op(Exp, X) :- (call(Exp) -> X is 1; X is 0).
+
+% arithmetic_op(X): X is an arithmetic operator
+arithmetic_op(+).
+arithmetic_op(-).
+arithmetic_op(*).
+arithmetic_op(/).
+arithmetic_op(mod).
+
+% boolean_op(X): X is a boolean operator
+boolean_op(>).
+boolean_op(<).
+boolean_op(>=).
+boolean_op(=<).
+boolean_op(=:=).
+boolean_op(=\=).
